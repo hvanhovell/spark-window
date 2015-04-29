@@ -30,7 +30,9 @@ val airlines = sqlContext.csvFile("src/test/resources/allyears2k_headers.csv")
 // - Group by destination and order by date and time. 
 // - Count how many delays there were in the past 3 Flights
 // - Add a unique sequence number for the current group. 
-val flightsSAN = airlines.filter($"Origin" === "SAN").window($"Dest")($"Year", $"Month", $"DayOfMonth", $"Deptime").select(
+val flightsSAN = airlines.filter($"Origin" === "SAN").
+                          window($"Dest")($"Year", $"Month", $"DayOfMonth", $"Deptime").
+                          select(
   $"Origin"
   ,$"Dest"
   ,$"UniqueCarrier"
@@ -44,12 +46,14 @@ flightsSAN.show(100)
 ```
 
 ## TODO
+
 ### General
 - Documentation
 - Performance might improve as soon as Exchange starts supporting secondary sort.
 - Integrate this effort with [PR5604](https://github.com/apache/spark/pull/5604).
 - Create a true PR :)...
 - Test execution phase.
+
 ### Logical
 - Add value ranges and shift functionality to the Window Expression.
 - Potentially add a window definition to the Window Expression. 
@@ -60,14 +64,17 @@ flightsSAN.show(100)
   - PERCENT_RANK()
   - NTILE()
   - PERCENTILE()
+
 ### Execution
 - The current implementation is semi-blocking. It processes all the rows of the same group at a 
   time. There are a number of scenario's (i.e. Row Numbers or Running Sums) in which we can do true
   or buffered (in case of positive shifts) streaming.   
 - Add CodeGeneration for feeding the aggregate expressions.
+
 ### Optimizer
 - Prune columns
 - DO NOT push through filters.
+
 ### Analyzer 
 - Add * resolution.
 - Add sort expression to the to-be processed result. This is needed for functionality such a rank().
@@ -81,5 +88,6 @@ flightsSAN.show(100)
   backing expression. 
 - Fail when a range window aggregates without an aggregating expression is encountered. Another 
   option would be to construct an array.
+
 ### Parser
 - Add window expressions to the parser.
