@@ -25,3 +25,5 @@ spark-local-shell.sh
 spark.local.properties
 spark.log
 derby.log
+.Rhistory
+metastore_db
