@@ -1,0 +1,27 @@
+*.class
+*.log
+
+# sbt specific
+.cache
+.history
+.lib/
+dist/*
+target/
+lib_managed/
+src_managed/
+project/boot/
+project/plugins/project/
+
+# Eclipse specific
+.settings/
+.project
+.classpath
+
+# Scala-IDE specific
+.scala_dependencies
+.worksheet
+
+spark-local-shell.sh
+spark.local.properties
+spark.log
+derby.log
