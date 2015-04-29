@@ -1,5 +1,5 @@
 # SPARK Window
-This project implements Window Functions for Spark SQL. In it is currently Work in Progress. This 
+This project implements Window Functions for Spark SQL. It is currently Work in Progress. This 
 implementation requires functionality provided by SPARK 1.4.0.
 
 ## Usage
