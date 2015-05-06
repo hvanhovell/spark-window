@@ -9,6 +9,8 @@ scalaVersion := "2.10.4"
 // Add dependency graph
 net.virtualvoid.sbt.graph.Plugin.graphSettings
 
+isSnapshot := true
+
 libraryDependencies ++= Seq(
 	"org.apache.spark" %% "spark-core" % "1.4.0-SNAPSHOT" % "provided",
 	"org.apache.spark" %% "spark-sql" % "1.4.0-SNAPSHOT" % "provided",

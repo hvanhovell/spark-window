@@ -26,6 +26,9 @@ import org.apache.spark.sql.catalyst.expressions.Literal
 import org.apache.spark.sql.catalyst.plans.logical.WindowedAggregate
 import org.apache.spark.sql.catalyst.expressions.Count
 import org.apache.spark.sql.catalyst.expressions.WindowExpression
+import org.apache.spark.sql.catalyst.analysis.UnresolvedStar
+import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
+import org.apache.spark.sql.catalyst.analysis.ResolvedStar
 
 // A number of the optimalizations here should be in the analyser...
 object WindowedData {
@@ -78,9 +81,12 @@ object WindowedData {
 case class WindowedData(df: DataFrame, groupingExprs: Seq[Expression], order: Seq[SortOrder]) {
   @scala.annotation.varargs
   def select(expr: Column, exprs: Column*): DataFrame = {
-    val namedExprs = (expr +: exprs).map(_.expr).map {
-      case expr: NamedExpression => expr
-      case expr: Expression => Alias(expr, expr.prettyString)()
+    val namedExprs = (expr +: exprs).map(_.expr).flatMap {
+      // The resolution should be done by the planner. 
+      case UnresolvedStar(None) => df.schema.fieldNames.map(df.resolve(_))
+      case attr: UnresolvedAttribute => Seq(df.resolve(attr.name))
+      case expr: NamedExpression => Seq(expr)
+      case expr: Expression => Seq(Alias(expr, expr.prettyString)())
     }
     DataFrame(df.sqlContext, WindowedAggregate(groupingExprs, order, namedExprs, df.logicalPlan))
   }

@@ -26,10 +26,12 @@ abstract class ExtraSQLStrategy extends Strategy {
   def planLater(plan: LogicalPlan) = sql.planner.apply(plan).next()
 }
 
-object ExtraSQLStrategy {  
-  def add(sql: SQLContext)(f: SQLContext => Strategy): Strategy = {
-    val strategy = f(sql)
-    sql.experimental.extraStrategies = sql.experimental.extraStrategies :+ strategy 
-    strategy
+object ExtraSQLStrategy {
+  implicit class ExtraStrategySQLContext(val sql: SQLContext) extends AnyVal {
+    def add(f: SQLContext => Strategy): Strategy = {
+      val strategy = f(sql)
+      sql.experimental.extraStrategies = sql.experimental.extraStrategies :+ strategy
+      strategy
+    }
   }
 }

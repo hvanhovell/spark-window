@@ -4,20 +4,20 @@ implementation requires functionality provided by SPARK 1.4.0.
 
 ## Usage
 - Have a build of SPARK 1.4.0 ready, and make sure the JARS are installed to your local maven repo.
-- Compile and package the code using SBT.
+- Create an assembly using SBT.
 ```
-sbt package
+sbt assembly
 ```
 - Launch spark shell with the produced JAR (target/scala-2.10/spark-window_2.10-0.01.jar) attached.
 - Execute the following code
 ```scala
 import com.databricks.spark.csv._
 import org.apache.spark.sql.WindowedData._
-import org.apache.spark.sql.ExtraSQLStrategy
+import org.apache.spark.sql.ExtraSQLStrategy._
 import org.apache.spark.sql.execution.WindowedAggregateStrategy
 
 // Add the windowed aggregate functionality to the context 
-ExtraSQLStrategy.add(sqlContext)(WindowedAggregateStrategy)
+sqlContext.add(WindowedAggregateStrategy)
 
 // Conversion function for YES NO fields
 val yesNoToInt = udf((raw: String) => if (raw == "YES") 1 else 0)
