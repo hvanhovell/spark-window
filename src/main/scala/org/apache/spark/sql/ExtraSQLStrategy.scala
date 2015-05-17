@@ -23,7 +23,7 @@ import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 
 abstract class ExtraSQLStrategy extends Strategy {
   val sql: SQLContext
-  def planLater(plan: LogicalPlan) = sql.planner.apply(plan).next()
+  def planLater(plan: LogicalPlan) = sql.planner.plan(plan).next()
 }
 
 object ExtraSQLStrategy {

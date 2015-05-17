@@ -35,7 +35,7 @@ import org.apache.spark.sql.catalyst.errors.`package`.TreeNodeException
  *      - An AggregateExpression is pointless when the window bounds are equal. 
  *      - A WindowExpression is pointless when both the lower and upper windows bound are 0. 
  */
-case class WindowExpression(child: Expression, lower: Option[Int], upper: Option[Int]) extends UnaryExpression {
+case class CustomWindowExpression(child: Expression, lower: Option[Int], upper: Option[Int]) extends UnaryExpression {
   def nullable: Boolean = true
   def dataType = child.dataType
   def eval(input: Row = null): EvaluatedType = {

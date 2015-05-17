@@ -23,6 +23,13 @@ import org.apache.spark.sql.catalyst.expressions.AggregateFunction
 import org.apache.spark.sql.catalyst.expressions.EmptyRow
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.catalyst.expressions.GenericRowLike
+import org.apache.spark.sql.catalyst.expressions.InterpretedProjection
+import org.apache.spark.sql.catalyst.expressions.Cast
+import org.apache.spark.sql.types.IntegerType
+import org.apache.spark.sql.catalyst.expressions.Subtract
+import org.apache.spark.sql.catalyst.expressions.Literal
+import org.apache.spark.sql.catalyst.expressions.Add
+import org.apache.spark.sql.catalyst.expressions.GreaterThanOrEqual
 
 /**
  * Result of a function applied to a window.
@@ -161,6 +168,7 @@ private[execution] final class RangeAggregateWindowFunction(factory: AggregateEx
 
   def apply(index: Int): Any = result(index)
 }
+
 
 private[execution] final class WindowFunctionRowView(val length: Int, val functions: Array[WindowFunction]) extends GenericRowLike {
   var index = -1

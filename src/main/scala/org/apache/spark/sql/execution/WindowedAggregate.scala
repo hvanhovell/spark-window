@@ -31,12 +31,17 @@ import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.catalyst.expressions.JoinedRow4
 import org.apache.spark.sql.catalyst.expressions.NamedExpression
 import org.apache.spark.sql.catalyst.expressions.SortOrder
-import org.apache.spark.sql.catalyst.expressions.WindowExpression
+import org.apache.spark.sql.catalyst.expressions.CustomWindowExpression
 import org.apache.spark.sql.catalyst.plans.physical.AllTuples
 import org.apache.spark.sql.catalyst.plans.physical.ClusteredDistribution
 import org.apache.spark.sql.catalyst.plans.physical.Distribution
 import org.apache.spark.util.collection.CompactBuffer
 import scala.collection.mutable.ArrayBuffer
+import org.apache.spark.sql.catalyst.expressions.LessThanOrEqual
+import org.apache.spark.sql.catalyst.expressions.BoundReference
+import org.apache.spark.sql.catalyst.expressions.GreaterThanOrEqual
+import org.apache.spark.sql.catalyst.expressions.AggregateFunction
+import org.apache.spark.sql.catalyst.expressions.Sum
 
 /**
  * :: DeveloperApi ::
@@ -108,22 +113,22 @@ case class WindowedAggregate(groupingExprs: Seq[Expression],
     aggregateExprs.flatMap { aggregateExpr =>
       // Collect WindowExpressions
       val windowExprs = aggregateExpr.collect {
-        case anchor@WindowExpression(expr: AggregateExpression, None, None) => 
+        case anchor@CustomWindowExpression(expr: AggregateExpression, None, None) => 
             computedExpr(anchor, (rows: Seq[Row]) => new GlobalAggregateWindowFunction(bind(expr), rows))
-          case anchor@WindowExpression(expr: AggregateExpression, None, Some(offset)) => 
+          case anchor@CustomWindowExpression(expr: AggregateExpression, None, Some(offset)) => 
             computedExpr(anchor, (rows: Seq[Row]) => new BelowAggregateWindowFunction(bind(expr), rows, offset))
-          case anchor@WindowExpression(expr: AggregateExpression, Some(offset), None) => 
+          case anchor@CustomWindowExpression(expr: AggregateExpression, Some(offset), None) => 
             computedExpr(anchor, (rows: Seq[Row]) => new AboveAggregateWindowFunction(bind(expr), rows, offset))
-          case anchor@WindowExpression(expr: AggregateExpression, Some(low), Some(high)) => 
+          case anchor@CustomWindowExpression(expr: AggregateExpression, Some(low), Some(high)) => 
             computedExpr(anchor, (rows: Seq[Row]) => new RangeAggregateWindowFunction(bind(expr), rows, low, high))
-          case anchor@WindowExpression(expr, Some(low), Some(high)) if (low == high) => 
+          case anchor@CustomWindowExpression(expr, Some(low), Some(high)) if (low == high) => 
             computedExpr(anchor, (rows: Seq[Row]) => new ShiftingWindowFunction(bind(expr), rows, low))
       }
 
       // TODO move the code below to the planner.
       // Collect all the Aggregate Expressions contained by a window.
       val windowContainedAggregateExprs = windowExprs.collect {
-        case ComputedWindowExpression(WindowExpression(aggregateExpr: AggregateExpression, _, _), _, _) => aggregateExpr
+        case ComputedWindowExpression(CustomWindowExpression(aggregateExpr: AggregateExpression, _, _), _, _) => aggregateExpr
       }.toSet
       
       // Collect the bare Aggregate Expressions.
@@ -145,7 +150,7 @@ case class WindowedAggregate(groupingExprs: Seq[Expression],
 
   private[this] val projectSchema = child.output ++ computedWindowExpressions.map(_.attribute)
 
-  def execute(): RDD[Row] = attachTree(this, "execute") {
+  def doExecute(): RDD[Row] = attachTree(this, "execute") {
     child.execute().mapPartitions(iterator => {
       new Iterator[Row] {
         val result = newMutableProjection(projectExpr, projectSchema)()
@@ -205,4 +210,8 @@ case class WindowedAggregate(groupingExprs: Seq[Expression],
     }, true)
   }
 }
+
+
+
+
 
