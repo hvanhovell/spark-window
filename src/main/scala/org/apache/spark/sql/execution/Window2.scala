@@ -85,11 +85,12 @@ case class Window2(
 
     // Group the window expression by their processing frame.
     // TODO this gets a bit messy due to the different types of expressions we are considering.
+    // TODO remove this when window functions are removed from the equation...
     val groupedEindowExprs = windowExprs.groupBy { e =>
-      val tag = e.expr match {
-        case _: PivotWindowExpression => 'P'
-        case _: AggregateExpression => 'A'
-        case _ => 'R'
+      val tag = e.windowFunction match {
+        case PatchedWindowFunction(_: PivotWindowExpression) => 'P'
+        case PatchedWindowFunction(_: AggregateExpression) => 'A'
+        case PatchedWindowFunction(_) => 'R'
       }
       (tag, e.windowSpec.frameSpecification)
     }
@@ -105,7 +106,7 @@ case class Window2(
         // Bind the expressions.
         val frameExpressions = unboundFrameExpressions.map { e =>
          // TODO remove this when window functions are removed from the equation...
-         val functionExpression = e.windowFunction.asInstanceOf[PatchedWindowFunction].expr
+         val functionExpression = e.windowFunction.asInstanceOf[PatchedWindowFunction].child
          BindReferences.bindReference(functionExpression, child.output)
         }.toArray
         def aggregateFrameExpressions = frameExpressions.map(_.asInstanceOf[AggregateExpression]) 

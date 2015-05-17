@@ -6,7 +6,7 @@ import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.expressions.BoundReference
 import org.apache.spark.sql.types.IntegerType
 import org.apache.spark.sql.catalyst.expressions.Sum
-
+/*
 abstract class WindowFunctionTest extends FlatSpec {
   def name: String
   def function: WindowFunction
@@ -87,3 +87,4 @@ class RangeAggregateWindowFunctionTest extends WindowFunctionTest {
     else null
   }
 }
+*/

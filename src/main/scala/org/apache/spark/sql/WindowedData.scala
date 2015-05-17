@@ -17,37 +17,27 @@
 
 package org.apache.spark.sql
 
-import org.apache.spark.sql.catalyst.expressions.Alias
-import org.apache.spark.sql.catalyst.expressions.Expression
-import org.apache.spark.sql.catalyst.expressions.NamedExpression
-import org.apache.spark.sql.catalyst.expressions.SortOrder
-import org.apache.spark.sql.catalyst.expressions.Ascending
-import org.apache.spark.sql.catalyst.expressions.Literal
-import org.apache.spark.sql.catalyst.plans.logical.WindowedAggregate
 import org.apache.spark.sql.catalyst.expressions.Count
-import org.apache.spark.sql.catalyst.expressions.CustomWindowExpression
-import org.apache.spark.sql.catalyst.expressions.WindowSpecDefinition
-import org.apache.spark.sql.catalyst.analysis.UnresolvedStar
-import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
-import org.apache.spark.sql.catalyst.analysis.ResolvedStar
-import org.apache.spark.sql.catalyst.expressions.UnspecifiedFrame
 import org.apache.spark.sql.catalyst.expressions.CurrentRow
-import org.apache.spark.sql.catalyst.expressions.RowFrame
-import org.apache.spark.sql.catalyst.expressions.UnboundedPreceding
-import org.apache.spark.sql.catalyst.expressions.SpecifiedWindowFrame
-import org.apache.spark.sql.catalyst.expressions.UnboundedFollowing
-import org.apache.spark.sql.catalyst.expressions.WindowFrame
+import org.apache.spark.sql.catalyst.expressions.DenseRank
+import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.catalyst.expressions.FrameBoundary
 import org.apache.spark.sql.catalyst.expressions.FrameType
-import org.apache.spark.sql.catalyst.expressions.ValuePreceding
-import org.apache.spark.sql.catalyst.expressions.ValueFollowing
-import org.apache.spark.sql.catalyst.expressions.ValuePreceding
-import org.apache.spark.sql.catalyst.expressions.RangeFrame
-import org.apache.spark.sql.catalyst.expressions.WindowExpression
-import org.apache.spark.sql.catalyst.expressions.Rank
-import org.apache.spark.sql.catalyst.expressions.DenseRank
-import org.apache.spark.sql.catalyst.expressions.UnresolvedWindowSortOrder
+import org.apache.spark.sql.catalyst.expressions.Literal
 import org.apache.spark.sql.catalyst.expressions.PatchedWindowFunction
+import org.apache.spark.sql.catalyst.expressions.RangeFrame
+import org.apache.spark.sql.catalyst.expressions.Rank
+import org.apache.spark.sql.catalyst.expressions.RowFrame
+import org.apache.spark.sql.catalyst.expressions.SortOrder
+import org.apache.spark.sql.catalyst.expressions.SpecifiedWindowFrame
+import org.apache.spark.sql.catalyst.expressions.UnboundedFollowing
+import org.apache.spark.sql.catalyst.expressions.UnboundedPreceding
+import org.apache.spark.sql.catalyst.expressions.UnresolvedWindowSortOrder
+import org.apache.spark.sql.catalyst.expressions.UnspecifiedFrame
+import org.apache.spark.sql.catalyst.expressions.ValuePreceding
+import org.apache.spark.sql.catalyst.expressions.WindowExpression
+import org.apache.spark.sql.catalyst.expressions.WindowFrame
+import org.apache.spark.sql.catalyst.expressions.WindowSpecDefinition
 
 // A small DSL for working with window functions.
 object WindowedData {
@@ -69,7 +59,6 @@ object WindowedData {
   def denseRank(): Expression = DenseRank(UnresolvedWindowSortOrder).over().running()
   
   // TODO add n_tile/percent_rank()/...
-  
   def window(): WindowExpression = Literal(1).over()
   def window(spec: WindowSpecDefinition): WindowExpression = Literal(1).over(spec)
   def window(other: WindowExpression): WindowExpression = Literal(1).over(other)
@@ -95,7 +84,7 @@ object WindowedData {
     def over(): WindowExpression = over(WindowSpecDefinition(Nil, Nil, UnspecifiedFrame))
   }
 
-  implicit class WindowExpressionDSL(val expr: WindowExpression) extends AnyVal {
+  implicit class WindowExpressionDSL(val expr: WindowExpression) {
     def partitionBy(partitionSpec: Expression*): WindowExpression =
       expr.copy(windowSpec = expr.windowSpec.copy(partitionSpec = partitionSpec))
 

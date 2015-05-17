@@ -20,13 +20,14 @@ import org.apache.spark.sql.catalyst.errors.TreeNodeException
 import org.apache.spark.sql.catalyst.analysis.UnresolvedException
 import org.apache.spark.sql.types.LongType
 import org.apache.spark.sql.types.DataType
+import org.apache.spark.sql.catalyst.trees.UnaryNode
 
 
-case class PatchedWindowFunction(expr: Expression) extends Expression with WindowFunction {
-  override def dataType: DataType = expr.dataType
-  override def foldable: Boolean = expr.foldable
-  override def nullable: Boolean = expr.nullable
-  override lazy val resolved = expr.resolved
+case class PatchedWindowFunction(child: Expression) extends Expression with WindowFunction with UnaryNode[Expression] {
+  override def dataType: DataType = child.dataType
+  override def foldable: Boolean = child.foldable
+  override def nullable: Boolean = child.nullable
+  override lazy val resolved = child.resolved
 
   // Noop Window Function implementation.
   override def init(): Unit = {}
@@ -36,8 +37,9 @@ case class PatchedWindowFunction(expr: Expression) extends Expression with Windo
   override def batchUpdate(inputs: Array[AnyRef]): Unit = {}
   override def evaluate(): Unit = {}
   override def get(index: Int): Any = null
-  override def eval(input: Row = null): EvaluatedType = expr.eval(input).asInstanceOf[EvaluatedType]
-  override def toString: String = expr.toString
+  override def eval(input: Row = null): EvaluatedType = 
+    child.eval(input).asInstanceOf[EvaluatedType]
+  override def toString: String = child.toString
   override def newInstance(): WindowFunction = 
     throw new UnresolvedException(this, "newInstance")
 }
@@ -82,7 +84,11 @@ abstract class RankLikeFunction extends AggregateFunction {
 /**
  * Place Holder object for an Unresolved Window Sort Order.
  */
-case object UnresolvedWindowSortOrder extends Seq[Expression] 
+case object UnresolvedWindowSortOrder extends Seq[Expression] {
+  def length = 0
+  def apply(index: Int) = throw new NoSuchElementException
+  def iterator = Iterator.empty
+}
 
 case class Rank(children: Seq[Expression]) extends RankLikeExpression {
   override def newInstance(): AggregateFunction = RankFunction(children, this)

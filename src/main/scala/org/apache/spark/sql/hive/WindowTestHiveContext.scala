@@ -53,20 +53,22 @@ class WindowTestHiveContext(sc: SparkContext) extends HiveContext(sc) {
     def apply(plan: LogicalPlan): LogicalPlan = plan transformUp {
       case p: LogicalPlan if (!useWindow2Processor) =>
         p transformExpressions {
-          case PatchedWindowFunction(Count(Literal(1, IntegerType))) => UnresolvedWindowFunction("row_number", Nil)
+          case PatchedWindowFunction(Count(Literal(lit, _))) if (lit != null) => UnresolvedWindowFunction("row_number", Nil)
           case PatchedWindowFunction(DenseRank(_)) => UnresolvedWindowFunction("dense_rank", Nil)
           case PatchedWindowFunction(expr) => UnresolvedWindowFunction(expr.nodeName.toLowerCase(), expr.children)
         }
     }
   }
-
+  
   // Add the Window2 Strategy...
   object WindowStrategy extends Strategy {
     def apply(plan: LogicalPlan): Seq[SparkPlan] = plan match {
-      case Window(projectList, windowExprList, spec, child) => {
+      case Window(projectList, windowExprList, spec, child) if (useWindow2Processor) => {
         Window2(projectList ++ windowExprList, spec, planner.plan(child).next()) :: Nil
       }
       case _ => Nil
     }
   }
+  
+  experimental.extraStrategies = experimental.extraStrategies :+ WindowStrategy
 }
