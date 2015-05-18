@@ -21,6 +21,9 @@ import org.apache.spark.sql.catalyst.plans.logical.Window
 import org.apache.spark.sql.catalyst.expressions.WindowExpression
 import org.apache.spark.sql.catalyst.expressions.UnspecifiedFrame
 import org.apache.spark.sql.catalyst.expressions.Rank
+import org.apache.spark.sql.catalyst.expressions.SpecifiedWindowFrame
+import org.apache.spark.sql.catalyst.expressions.Expression
+import org.apache.spark.sql.catalyst.expressions.WindowSpecDefinition
 
 class WindowTestHiveContext(sc: SparkContext) extends HiveContext(sc) {
   protected[sql] def useWindow2Processor: Boolean =
@@ -57,13 +60,17 @@ class WindowTestHiveContext(sc: SparkContext) extends HiveContext(sc) {
       case p: LogicalPlan if (!useWindow2Processor) =>
         p transformExpressions {
           case WindowExpression(PatchedWindowFunction(Count(Literal(lit, _)), _), spec) if (lit != null) => 
-            WindowExpression(UnresolvedWindowFunction("row_number", Nil), spec.copy(frameSpecification = UnspecifiedFrame))  
-          case WindowExpression(PatchedWindowFunction(DenseRank(_), _), spec) => 
-            WindowExpression(UnresolvedWindowFunction("dense_rank", Nil), spec.copy(frameSpecification = UnspecifiedFrame))
+            windowFunctionToHive("row_number", Nil, spec)      
+          case WindowExpression(PatchedWindowFunction(DenseRank(_), _), spec) =>
+            windowFunctionToHive("dense_rank", Nil, spec)    
           case WindowExpression(PatchedWindowFunction(Rank(_), _), spec) => 
-            WindowExpression(UnresolvedWindowFunction("rank", Nil), spec.copy(frameSpecification = UnspecifiedFrame))
+            windowFunctionToHive("rank", Nil, spec)
           case PatchedWindowFunction(expr, children) => UnresolvedWindowFunction(expr.nodeName.toLowerCase(), children)
         }
+    }
+    
+    def windowFunctionToHive(name: String, children: Seq[Expression], spec: WindowSpecDefinition) = {
+      WindowExpression(UnresolvedWindowFunction(name, children), spec.copy(frameSpecification = UnspecifiedFrame))
     }
   }
   

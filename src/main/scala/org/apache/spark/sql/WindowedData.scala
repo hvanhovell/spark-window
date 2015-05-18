@@ -92,7 +92,7 @@ object WindowedData {
       }.get)
     }
     
-    def over(): WindowExpressionBuilder = over(WindowSpecDefinition(Nil, Nil, UnspecifiedFrame))
+    def over(): WindowExpressionBuilder = over(WindowSpecDefinition(Nil, Nil, SpecifiedWindowFrame(RowFrame, UnboundedPreceding, UnboundedFollowing)))
   }
 
   case class WindowExpressionBuilder(val expr: Expression) {

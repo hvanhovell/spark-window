@@ -151,12 +151,12 @@ case class Window2(
             input: Seq[Row] => new SlidingWindowFunctionFrame(input, factories, lBoundOrdering, uBoundOrdering)
           }
           // Pivot
-          case ('P', UnspecifiedFrame) => {
+          case ('P', SpecifiedWindowFrame(_, UnboundedPreceding, UnboundedFollowing)) => {
             val pivotFrameExpressions = frameExpressions.map(_.asInstanceOf[PivotWindowExpression])
             input: Seq[Row] => new PivotWindowFunctionFrame(input, pivotFrameExpressions)
           }
           // Global
-          case ('A', UnspecifiedFrame) => {
+          case ('A', SpecifiedWindowFrame(_, UnboundedPreceding, UnboundedFollowing)) => {
             val factories = aggregateFrameExpressions
             input: Seq[Row] => new UnboundedWindowFunctionFrame(input, factories)
           }
