@@ -16,19 +16,27 @@
  */
 package org.apache.spark.sql.catalyst.expressions
 
-import org.apache.spark.sql.catalyst.errors.TreeNodeException
 import org.apache.spark.sql.catalyst.analysis.UnresolvedException
-import org.apache.spark.sql.types.LongType
-import org.apache.spark.sql.types.DataType
 import org.apache.spark.sql.catalyst.trees.UnaryNode
+import org.apache.spark.sql.types.DataType
+import org.apache.spark.sql.types.LongType
 
+object PatchedWindowFunction {
+  def apply(expr: Expression) = new PatchedWindowFunction(expr, expr.children)
+}
 
-case class PatchedWindowFunction(child: Expression) extends Expression with WindowFunction with UnaryNode[Expression] {
-  override def dataType: DataType = child.dataType
-  override def foldable: Boolean = child.foldable
-  override def nullable: Boolean = child.nullable
-  override lazy val resolved = child.resolved
-
+case class PatchedWindowFunction(expr: Expression, children: Seq[Expression]) extends Expression with WindowFunction {
+  lazy val func = expr.withNewChildren(children)
+  override def dataType: DataType = func.dataType
+  override def foldable: Boolean = func.foldable
+  override def nullable: Boolean = func.nullable
+  override lazy val resolved = func.resolved
+  override def eval(input: Row = null): EvaluatedType = 
+    func.eval(input).asInstanceOf[EvaluatedType]
+  override def toString: String = func.toString
+  override def newInstance(): WindowFunction = 
+    throw new UnresolvedException(this, "newInstance")
+  
   // Noop Window Function implementation.
   override def init(): Unit = {}
   override def reset(): Unit = {}
@@ -37,11 +45,6 @@ case class PatchedWindowFunction(child: Expression) extends Expression with Wind
   override def batchUpdate(inputs: Array[AnyRef]): Unit = {}
   override def evaluate(): Unit = {}
   override def get(index: Int): Any = null
-  override def eval(input: Row = null): EvaluatedType = 
-    child.eval(input).asInstanceOf[EvaluatedType]
-  override def toString: String = child.toString
-  override def newInstance(): WindowFunction = 
-    throw new UnresolvedException(this, "newInstance")
 }
 
 /**
@@ -57,11 +60,7 @@ abstract class PivotWindowExpression extends AggregateExpression {
  * Base class for a rank expression.
  */
 abstract class RankLikeExpression extends AggregateExpression {
-  self: Product =>
-  override lazy val resolved = children match {
-    case UnresolvedWindowSortOrder => false
-    case _ => true
-  }
+  self: Product => 
   override def dataType: DataType = LongType
   override def foldable: Boolean = false
   override def nullable: Boolean = false
@@ -117,5 +116,17 @@ case class DenseRankFunction(override val children: Seq[Expression], base: Aggre
       last = current
       value = counter
     }
+  }
+}
+
+/**
+ * Helper extractor for making working with frame boundaries easier.
+ */
+object FrameBoundaryExtractor {
+  def unapply(boundary: FrameBoundary): Option[Int] = boundary match {
+    case CurrentRow => Some(0)
+    case ValuePreceding(offset) => Some(-offset)
+    case ValueFollowing(offset) => Some(offset)
+    case _ => None
   }
 }

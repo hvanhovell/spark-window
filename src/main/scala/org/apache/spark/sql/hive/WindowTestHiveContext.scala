@@ -18,6 +18,9 @@ import org.apache.spark.sql.catalyst.expressions.DenseRank
 import org.apache.spark.sql.execution.SparkPlan
 import org.apache.spark.sql.execution.Window2
 import org.apache.spark.sql.catalyst.plans.logical.Window
+import org.apache.spark.sql.catalyst.expressions.WindowExpression
+import org.apache.spark.sql.catalyst.expressions.UnspecifiedFrame
+import org.apache.spark.sql.catalyst.expressions.Rank
 
 class WindowTestHiveContext(sc: SparkContext) extends HiveContext(sc) {
   protected[sql] def useWindow2Processor: Boolean =
@@ -53,9 +56,13 @@ class WindowTestHiveContext(sc: SparkContext) extends HiveContext(sc) {
     def apply(plan: LogicalPlan): LogicalPlan = plan transformUp {
       case p: LogicalPlan if (!useWindow2Processor) =>
         p transformExpressions {
-          case PatchedWindowFunction(Count(Literal(lit, _))) if (lit != null) => UnresolvedWindowFunction("row_number", Nil)
-          case PatchedWindowFunction(DenseRank(_)) => UnresolvedWindowFunction("dense_rank", Nil)
-          case PatchedWindowFunction(expr) => UnresolvedWindowFunction(expr.nodeName.toLowerCase(), expr.children)
+          case WindowExpression(PatchedWindowFunction(Count(Literal(lit, _)), _), spec) if (lit != null) => 
+            WindowExpression(UnresolvedWindowFunction("row_number", Nil), spec.copy(frameSpecification = UnspecifiedFrame))  
+          case WindowExpression(PatchedWindowFunction(DenseRank(_), _), spec) => 
+            WindowExpression(UnresolvedWindowFunction("dense_rank", Nil), spec.copy(frameSpecification = UnspecifiedFrame))
+          case WindowExpression(PatchedWindowFunction(Rank(_), _), spec) => 
+            WindowExpression(UnresolvedWindowFunction("rank", Nil), spec.copy(frameSpecification = UnspecifiedFrame))
+          case PatchedWindowFunction(expr, children) => UnresolvedWindowFunction(expr.nodeName.toLowerCase(), children)
         }
     }
   }

@@ -38,111 +38,148 @@ import org.apache.spark.sql.catalyst.expressions.ValuePreceding
 import org.apache.spark.sql.catalyst.expressions.WindowExpression
 import org.apache.spark.sql.catalyst.expressions.WindowFrame
 import org.apache.spark.sql.catalyst.expressions.WindowSpecDefinition
+import org.apache.spark.sql.catalyst.expressions.WindowSpec
+import org.apache.spark.sql.catalyst.expressions.Ascending
+import org.apache.spark.sql.catalyst.expressions.ValueFollowing
 
 // A small DSL for working with window functions.
 object WindowedData {
-  implicit def colToExpr(col: Column) = col.expr
-  implicit def exprToCol(expr: Expression) = Column(expr)
-
   // Shifted values.
-  def lead(expr: Expression, lead: Int = 1): Expression = shift(expr, lead)
-  def lag(expr: Expression, lag: Int = 1): Expression = shift(expr, -lag)
-  def shift(expr: Expression, offset: Int): Expression = {
-    // TODO move this to analyzer.
-    if (offset == 0) expr
-    else expr.over().shift(offset)
-  }
+  def lead(expr: Expression, lead: Int = 1): Column = shift(expr, lead)
+  def lag(expr: Expression, lag: Int = 1): Column = shift(expr, -lag)
+  def shift(expr: Expression, offset: Int): Column = expr.over().shift(offset).toCol
 
   // Ranking functions.
-  def rownumber(): Expression = Count(Literal(1)).over().running()
-  def rank(): Expression = Rank(UnresolvedWindowSortOrder).over().running()
-  def denseRank(): Expression = DenseRank(UnresolvedWindowSortOrder).over().running()
+  def rownumber(): Column = Count(Literal(1)).over().running().toCol
+  def rank(): Column = Rank(UnresolvedWindowSortOrder).over().running().toCol
+  def denseRank(): Column = DenseRank(UnresolvedWindowSortOrder).over().running().toCol
   
-  // TODO add n_tile/percent_rank()/...
-  def window(): WindowExpression = Literal(1).over()
-  def window(spec: WindowSpecDefinition): WindowExpression = Literal(1).over(spec)
-  def window(other: WindowExpression): WindowExpression = Literal(1).over(other)
-  
-  implicit def toWindowExpression(c: Column) = ToWindowExpression(c.expr)
-  implicit class ToWindowExpression(val expr: Expression) {
-    def over(newSpec: WindowSpecDefinition): WindowExpression = expr match {
-      case WindowExpression(root, oldSpec) => {
-        // Merge specifications! The New spec always has precedence of the old one.
-        val partitionBy = if (!newSpec.partitionSpec.isEmpty) newSpec.partitionSpec 
-        else oldSpec.partitionSpec
-        val orderBy = if (!newSpec.orderSpec.isEmpty) newSpec.orderSpec 
-        else oldSpec.orderSpec
-        val frame = if (newSpec.frameSpecification != UnspecifiedFrame) newSpec.frameSpecification
-        else oldSpec.frameSpecification
-        
-        // Create the window spec expression.
-        WindowExpression(PatchedWindowFunction(expr), WindowSpecDefinition(partitionBy, orderBy, frame))
+  // Create windows.
+  def window(): WindowExpressionBuilder = Literal(1).over()
+  def window(spec: WindowSpecDefinition): WindowExpressionBuilder = Literal(1).over(spec)
+
+  implicit def toColumn(builder: WindowExpressionBuilder) = builder.toCol
+  implicit def toBuilder(expr: Expression): ToWindowExpressionBuilder = ToWindowExpressionBuilder(Column(expr))
+  implicit class ToWindowExpressionBuilder(val col: Column) {
+    def over(newSpec: WindowSpecDefinition): WindowExpressionBuilder = {
+      // Merge in the given specification into the existing aggregates
+      val transformed = col.expr.transform {
+        case WindowExpression(root, oldSpec) => {
+          // Merge specifications! The New spec always has precedence of the old one.
+          val partitionBy = if (!newSpec.partitionSpec.isEmpty) newSpec.partitionSpec
+          else oldSpec.partitionSpec
+          val orderBy = if (!newSpec.orderSpec.isEmpty) newSpec.orderSpec
+          else oldSpec.orderSpec
+          val frame = if (newSpec.frameSpecification != UnspecifiedFrame) newSpec.frameSpecification
+          else oldSpec.frameSpecification
+
+          // Create the window spec expression.
+          WindowExpression(root, WindowSpecDefinition(partitionBy, orderBy, frame))
+        }
       }
-      case _ => WindowExpression(PatchedWindowFunction(expr), newSpec)
+
+      // Make sure there is a window expression to manipulate.
+      val wrapped = if (!transformed.fastEquals(col.expr)) transformed
+      else WindowExpression(PatchedWindowFunction(col.expr), newSpec)
+
+      // Return the builder.
+      WindowExpressionBuilder(wrapped)
     }
-    def over(other: WindowExpression): WindowExpression = over(other.windowSpec)
-    def over(): WindowExpression = over(WindowSpecDefinition(Nil, Nil, UnspecifiedFrame))
+    
+    def over(other: WindowExpressionBuilder): WindowExpressionBuilder = {
+      over(other.expr.collectFirst{
+        case WindowExpression(_, spec) => spec
+      }.get)
+    }
+    
+    def over(): WindowExpressionBuilder = over(WindowSpecDefinition(Nil, Nil, UnspecifiedFrame))
   }
 
-  implicit class WindowExpressionDSL(val expr: WindowExpression) {
-    def partitionBy(partitionSpec: Expression*): WindowExpression =
-      expr.copy(windowSpec = expr.windowSpec.copy(partitionSpec = partitionSpec))
+  case class WindowExpressionBuilder(val expr: Expression) {
+    def partitionBy(partitionSpec: Column*): WindowExpressionBuilder =
+      modWindowSpec(_.copy(partitionSpec = partitionSpec.map(_.expr)))
 
-    def orderBy(orderSpec: SortOrder*): WindowExpression =
-      expr.copy(windowSpec = expr.windowSpec.copy(orderSpec = orderSpec))
+    def orderBy(orderSpec: Column*): WindowExpressionBuilder =
+      modWindowSpec(_.copy(orderSpec = orderSpec.map { col =>
+        col.expr match {
+          case e: SortOrder => e
+          case e => SortOrder(e, Ascending)
+        }
+      }))
 
-    def running(): WindowExpression =
+    def running(): WindowExpressionBuilder =
       modFrameSpec(SpecifiedWindowFrame(RowFrame, UnboundedPreceding, CurrentRow))
 
-    def shift(offset: Int): WindowExpression =
-      modFrameSpec(SpecifiedWindowFrame(RowFrame, UnboundedPreceding, CurrentRow))
+    def shift(offset: Int): WindowExpressionBuilder =
+      modFrameSpec(SpecifiedWindowFrame(RowFrame, ValuePreceding(-offset), ValueFollowing(offset)))
 
-    def rowsPreceding(rows: Int): WindowExpression = preceding(RowFrame, rows)
+    def rowsPreceding(rows: Int): WindowExpressionBuilder = preceding(RowFrame, rows)
 
-    def rowsFollowing(rows: Int): WindowExpression = following(RowFrame, rows)
+    def rowsFollowing(rows: Int): WindowExpressionBuilder = following(RowFrame, rows)
 
-    def valuesPreceding(values: Int): WindowExpression = preceding(RangeFrame, values)
+    def valuesPreceding(values: Int): WindowExpressionBuilder = preceding(RangeFrame, values)
 
-    def valuesFollowing(values: Int): WindowExpression = following(RangeFrame, values)
+    def valuesFollowing(values: Int): WindowExpressionBuilder = following(RangeFrame, values)
 
-    def unboundedPreceding(): WindowExpression = expr.windowSpec.frameSpecification match {
-      case UnspecifiedFrame => expr
-      case SpecifiedWindowFrame(_, _, UnboundedFollowing) =>
-        modFrameSpec(UnspecifiedFrame)
-      case SpecifiedWindowFrame(frameType, _, following) =>
-        modFrameSpec(frameType, UnboundedPreceding, following)
+    def unboundedPreceding(): WindowExpressionBuilder = modFrameSpec { frame =>
+      frame match {
+        case UnspecifiedFrame => frame
+        case SpecifiedWindowFrame(_, _, UnboundedFollowing) =>
+          UnspecifiedFrame
+        case SpecifiedWindowFrame(frameType, _, following) =>
+          SpecifiedWindowFrame(frameType, UnboundedPreceding, following)
+      }
     }
 
-    def unboundedFollowing(): WindowExpression = expr.windowSpec.frameSpecification match {
-      case UnspecifiedFrame => expr
-      case SpecifiedWindowFrame(_, UnboundedPreceding, _) =>
-        modFrameSpec(UnspecifiedFrame)
-      case SpecifiedWindowFrame(frameType, preceding, _) =>
-        modFrameSpec(frameType, preceding, UnboundedFollowing)
+    def unboundedFollowing(): WindowExpressionBuilder = modFrameSpec { frame =>
+      frame match {
+        case UnspecifiedFrame => frame
+        case SpecifiedWindowFrame(_, UnboundedPreceding, _) =>
+          UnspecifiedFrame
+        case SpecifiedWindowFrame(frameType, preceding, _) =>
+          SpecifiedWindowFrame(frameType, preceding, UnboundedFollowing)
+      }
     }
 
-    private[this] def preceding(frameType: FrameType, preceding: Int): WindowExpression = {
+    private[this] def preceding(frameType: FrameType, preceding: Int): WindowExpressionBuilder = modFrameSpec { frame =>
       val start = if (preceding == 0) CurrentRow else ValuePreceding(preceding)
-      val end = specifyFrameSpec.frameEnd
-      modFrameSpec(frameType, start, end)
+      frame match {
+        case UnspecifiedFrame => 
+          SpecifiedWindowFrame(frameType, start, UnboundedFollowing)
+        case SpecifiedWindowFrame(_, _, end) =>
+          SpecifiedWindowFrame(frameType, start, end)
+      }
+    }
+    
+    private[this] def following(frameType: FrameType, following: Int): WindowExpressionBuilder = modFrameSpec { frame =>
+      val end = if (following == 0) CurrentRow else ValueFollowing(following)
+      frame match {
+        case UnspecifiedFrame => 
+          SpecifiedWindowFrame(frameType, UnboundedPreceding, end)
+        case SpecifiedWindowFrame(_, start, _) =>
+          SpecifiedWindowFrame(frameType, start, end)
+      }
     }
 
-    private[this] def following(frameType: FrameType, following: Int): WindowExpression = {
-      val start = specifyFrameSpec.frameStart
-      val end = if (following == 0) CurrentRow else ValuePreceding(0)
-      modFrameSpec(frameType, start, end)
+    private[this] def modFrameSpec(newFrameSpec: WindowFrame): WindowExpressionBuilder =
+      modWindowSpec(_.copy(frameSpecification = newFrameSpec))
+
+    private[this] def modFrameSpec(f: WindowFrame => WindowFrame): WindowExpressionBuilder =
+      modWindowSpec(w => w.copy(frameSpecification = f(w.frameSpecification)))
+
+    private[this] def modWindowSpec(f: WindowSpecDefinition => WindowSpecDefinition): WindowExpressionBuilder = {
+      val transformed = expr.transform {
+        case e: WindowExpression => {
+          val newSpec = f(e.windowSpec)
+          if (newSpec == e.windowSpec) e
+          else e.copy(windowSpec = newSpec)
+        }
+      }
+      if (!transformed.fastEquals(expr)) WindowExpressionBuilder(transformed)
+      else this
     }
-
-    private[this] def specifyFrameSpec: SpecifiedWindowFrame = expr.windowSpec.frameSpecification match {
-      case UnspecifiedFrame => SpecifiedWindowFrame(RowFrame, UnboundedPreceding, UnboundedFollowing)
-      case frame: SpecifiedWindowFrame => frame
-    }
-
-    private[this] def modFrameSpec(frameType: FrameType, frameStart: FrameBoundary, frameEnd: FrameBoundary): WindowExpression =
-      modFrameSpec(SpecifiedWindowFrame(frameType, frameStart, frameEnd))
-
-    private[this] def modFrameSpec(newFrameSpec: WindowFrame): WindowExpression =
-      expr.copy(windowSpec = expr.windowSpec.copy(frameSpecification = newFrameSpec))
+    
+    def toCol: Column = new Column(expr)
   }
 }
 
